@@ -1,3 +1,4 @@
+
 name: Build APK (arm32)
 
 on:
@@ -13,37 +14,49 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Required for git describe or versionName generation
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
+    - name: Set up Java 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 17
 
-      - name: Ensure Android SDK tools
-        run: |
-          echo "y" | sudo $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          echo "y" | sudo $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+    - name: Set up Android SDK
+      run: |
+        echo "y" | sudo $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        echo "y" | sudo $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+          "platform-tools" \
+          "build-tools;34.0.0" \
+          "platforms;android-34"
 
-      - name: Grant execute permissions to gradlew
-        run: chmod +x ./gradlew
+    - name: Grant execute permissions to gradlew
+      run: chmod +x ./gradlew
 
-      - name: Fix versionCode if needed
-        run: |
-          file="app/build.gradle"
-          if grep -q "versionCode[[:space:]]*=[[:space:]]*-1" "$file"; then
-            sed -i 's/versionCode[[:space:]]*=[[:space:]]*-1/versionCode = 1/' "$file"
-          elif ! grep -q "versionCode[[:space:]]*=" "$file"; then
-            sed -i '/defaultConfig {/a \    versionCode = 1' "$file"
-          fi
+    - name: Patch versionCode and fallback versionName
+      run: |
+        file="app/build.gradle"
 
-      - name: Build APK for arm32 (armeabi-v7a)
-        run: ./gradlew assembleRelease -PabiFilters=armeabi-v7a
+        # Patch versionCode if invalid
+        if grep -q "versionCode[[:space:]]*=[[:space:]]*-1" "$file"; then
+          sed -i 's/versionCode[[:space:]]*=[[:space:]]*-1/versionCode = 1/' "$file"
+        elif ! grep -q "versionCode[[:space:]]*=" "$file"; then
+          sed -i '/defaultConfig {/a \        versionCode = 1' "$file"
+        fi
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: shelter-arm32-apk
-          path: app/build/outputs/apk/release/*.apk
+        # Add fallback versionName if not defined
+        if ! grep -q "versionName[[:space:]]*=" "$file"; then
+          sed -i '/defaultConfig {/a \        versionName = "1.0.0"' "$file"
+        fi
+
+    - name: Build APK for arm32 (armeabi-v7a)
+      run: ./gradlew assembleRelease -PabiFilters=armeabi-v7a
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: shelter-arm32-apk
+        path: app/build/outputs/apk/release/*.apk
