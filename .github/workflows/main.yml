@@ -23,7 +23,14 @@ jobs:
           java-version: '17' # Adjust to the Java version required by your project
 
       - name: Accept Android SDK licenses
+        # This step ensures all SDK licenses are accepted without trying to install packages.
         run: yes | sdkmanager --licenses
+
+      - name: Install Android SDK Components (Optional - if not already present on runner)
+        # Only add this step if you need to explicitly install or update SDK components.
+        # The 'ubuntu-latest' runner usually has common components.
+        run: |
+          sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -36,4 +43,3 @@ jobs:
         with:
           name: apks
           path: app/build/outputs/apk/debug/ # Adjust this path if your build output differs (e.g., release)
-
