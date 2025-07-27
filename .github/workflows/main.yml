@@ -22,26 +22,40 @@ jobs:
           distribution: 'temurin' # Recommended distribution
           java-version: '17' # Common Java version for modern Android projects. Adjust if your project requires a different one.
 
-      - name: Define Android SDK Environment Variables
-        # Explicitly set ANDROID_SDK_ROOT and add SDK tools to PATH.
-        # This ensures sdkmanager and other tools are found correctly.
-        run: |
-          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
-          echo "PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_ENV
+      - name: Set up Android SDK and Accept Licenses
+        uses: android-actions/setup-sdk@v1 # This action handles SDK installation and license acceptance
+        with:
+          # You can specify components here if you need very specific versions,
+          # but usually, it installs common ones and accepts licenses.
+          # Example: sdk-channel: '0' # Stable channel
+          # Example: build-tools: '34.0.0'
+          # Example: platform-tools: 'latest'
+          # Example: platforms: 'android-34'
+          # For license acceptance, this action internally uses 'yes | sdkmanager --licenses' or similar.
+          # Explicitly calling sdkmanager --licenses again below is a fallback/double-check.
+          api-level: 34 # Target API level for building
 
-      - name: Accept Android SDK Licenses
-        # This is the most critical step to fix your current error.
-        # We pipe 'yes' to all prompts from sdkmanager --licenses, using the full path to sdkmanager.
-        run: yes | ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin/sdkmanager --licenses
-
-      - name: Install required Android SDK components
-        # Install specific SDK platform and build tools needed by your project.
-        # Android 11 is API 30. Building with API 34 tools is fine if minSdk/targetSdk are compatible.
+      # Optional: Double-check license acceptance as a separate step.
+      # This is a fallback in case setup-sdk doesn't catch everything, but it should be redundant.
+      - name: Re-confirm Android SDK Licenses (Fallback)
+        # This uses the direct sdkmanager command in case setup-sdk misses any.
+        # It's good practice to have it, but setup-sdk should ideally handle it.
         run: |
-          ${{ env.ANDROID_SDK_ROOT }}/cmdline-tools/latest/bin/sdkmanager \
-          "platform-tools" \
-          "build-tools;34.0.0" \
-          "platforms;android-34"
+          # The SDK path should be set by android-actions/setup-sdk, but we use a common fallback path.
+          # Find sdkmanager in common paths or rely on PATH set by setup-sdk
+          if command -v sdkmanager &> /dev/null
+          then
+              yes | sdkmanager --licenses || true
+          else
+              echo "sdkmanager not found in PATH. Assuming setup-sdk handled it."
+              # Try a common absolute path if sdkmanager is not in PATH
+              if [ -d "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" ]; then
+                yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+              else
+                echo "Warning: Cannot find sdkmanager to perform license re-confirmation."
+              fi
+          fi
+
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
