@@ -1,36 +1,53 @@
-name: Build Shelter 
+name: Build APK (arm32)
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
+      - master
   pull_request:
 
 jobs:
-  build:
-    name: Build APK (arm32)
-    runs-on: ubuntu-latest
+  build-arm32:
+    runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: 17
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12266719
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: true
+          packages: |
+            tools
+            platform-tools
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Build APK for armeabi-v7a (arm32)
+      - name: Fix versionCode if needed
+        run: |
+          # Ensure versionCode is a positive integer
+          file="app/build.gradle"
+          if grep -q "versionCode[[:space:]]*=[[:space:]]*-1" "$file"; then
+            sed -i 's/versionCode[[:space:]]*=[[:space:]]*-1/versionCode = 1/' "$file"
+          fi
+
+      - name: Build APK for arm32 (armeabi-v7a)
         run: ./gradlew assembleRelease -PabiFilters=armeabi-v7a
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: shelter-arm32-a10s-apk
-          path: app/build/outputs/apk/release/app-armeabi-v7a-release.apk
+          name: shelter-arm32-apk
+          path: app/build/outputs/apk/release/*.apk
