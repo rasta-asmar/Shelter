@@ -1,63 +1,40 @@
-name: Build APK (arm32)
+name: Build Shelter APK
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
-      - master
-  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-arm32:
-    runs-on: ubuntu-24.04
+  build:
+    runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout full Git history
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Needed to allow Git describe to work
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Java 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-    - name: Install Android SDK
-      run: |
-        echo "y" | sudo $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
-        echo "y" | sudo $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-          "platform-tools" \
-          "build-tools;34.0.0" \
-          "platforms;android-34"
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
 
-    - name: Make gradlew executable
-      run: chmod +x ./gradlew
+      - name: Fix versionCode and versionName
+        run: |
+          sed -i 's/versionCode\s*-1/versionCode 1/' app/build.gradle
+          sed -i 's/versionName\s*getGitVersionName()/versionName "1.0"/' app/build.gradle
 
-    - name: Fix versionCode and versionName manually
-      run: |
-        FILE="app/build.gradle"
+      - name: Build APK
+        run: ./gradlew assembleRelease -PabiFilters=armeabi-v7a
 
-        # Fix versionCode if -1 or missing
-        if grep -q "versionCode[[:space:]]*=[[:space:]]*-1" "$FILE"; then
-          sed -i 's/versionCode[[:space:]]*=[[:space:]]*-1/versionCode = 1/' "$FILE"
-        elif ! grep -q "versionCode[[:space:]]*=" "$FILE"; then
-          sed -i '/defaultConfig {/a \        versionCode = 1' "$FILE"
-        fi
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shelter-armeabi-v7a
+          path: app/build/outputs/apk/release/*.apk
 
-        # Remove or replace dynamic versionName calls like getGitVersionName()
-        if grep -q "versionName.*getGitVersionName()" "$FILE"; then
-          sed -i 's/versionName.*getGitVersionName()/versionName = "1.0.0"/' "$FILE"
-        elif ! grep -q "versionName[[:space:]]*=" "$FILE"; then
-          sed -i '/defaultConfig {/a \        versionName = "1.0.0"' "$FILE"
-        fi
-
-    - name: Build APK for armeabi-v7a
-      run: ./gradlew assembleRelease -PabiFilters=armeabi-v7a --stacktrace
-
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: shelter-arm32-apk
-        path: app/build/outputs/apk/release/*.apk
